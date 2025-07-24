@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Copy, Check, Download, Clock, Files } from 'lucide-react';
+import { Copy, Check, Download, Clock, Files, Flame } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
@@ -7,9 +7,10 @@ import { useToast } from '@/hooks/use-toast';
 interface CodeDisplayProps {
   code: string;
   fileCount: number;
+  burnAfterDownload?: boolean;
 }
 
-export const CodeDisplay = ({ code, fileCount }: CodeDisplayProps) => {
+export const CodeDisplay = ({ code, fileCount, burnAfterDownload }: CodeDisplayProps) => {
   const [copied, setCopied] = useState(false);
   const { toast } = useToast();
 
@@ -81,6 +82,12 @@ export const CodeDisplay = ({ code, fileCount }: CodeDisplayProps) => {
           <Download className="w-4 h-4" />
           <span>{fileCount} file{fileCount !== 1 ? 's' : ''}</span>
         </div>
+        {burnAfterDownload && (
+          <div className="flex items-center space-x-2 text-destructive">
+            <Flame className="w-4 h-4" />
+            <span>Burns after 1st download</span>
+          </div>
+        )}
       </div>
     </Card>
   );

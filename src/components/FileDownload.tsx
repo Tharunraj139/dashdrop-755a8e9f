@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Download, Search, FileX, Trash2 } from 'lucide-react';
+import { Download, Search, FileX, Trash2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -17,6 +17,7 @@ export const FileDownload = () => {
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [files, setFiles] = useState<FileInfo[]>([]);
+  const [burnAfterDownload, setBurnAfterDownload] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [codeFound, setCodeFound] = useState(false);
@@ -44,12 +45,14 @@ export const FileDownload = () => {
     // Simulate API call
     setTimeout(() => {
       // For demo, accept any 6-character code
+      const isBurnEnabled = localStorage.getItem(`burn_${code}`) === 'true';
+      setBurnAfterDownload(isBurnEnabled);
       setFiles(mockFiles);
       setCodeFound(true);
       setLoading(false);
       toast({
         title: "Files found!",
-        description: `Found ${mockFiles.length} files ready for download`,
+        description: `Found ${mockFiles.length} files ready for download${isBurnEnabled ? ' (will be deleted after download)' : ''}`,
       });
     }, 1000);
   };
@@ -74,10 +77,26 @@ export const FileDownload = () => {
       clearInterval(interval);
       setDownloadProgress(100);
       setDownloading(false);
-      toast({
-        title: "Download complete!",
-        description: "Your files have been downloaded successfully",
-      });
+      
+      // If burn after download is enabled, simulate file deletion
+      if (burnAfterDownload) {
+        toast({
+          title: "Download complete!",
+          description: "Files have been downloaded and permanently deleted from the server",
+        });
+        // Clear files and reset state
+        setTimeout(() => {
+          setFiles([]);
+          setCodeFound(false);
+          setCode('');
+          localStorage.removeItem(`burn_${code}`);
+        }, 2000);
+      } else {
+        toast({
+          title: "Download complete!",
+          description: "Your files have been downloaded successfully",
+        });
+      }
     }, 3000);
   };
 
@@ -124,6 +143,18 @@ export const FileDownload = () => {
 
       {codeFound && files.length > 0 && (
         <Card className="p-6">
+          {burnAfterDownload && (
+            <div className="flex items-center space-x-2 p-3 bg-destructive/10 border border-destructive/20 rounded-lg mb-4">
+              <AlertTriangle className="w-5 h-5 text-destructive" />
+              <div className="text-sm">
+                <span className="font-medium text-destructive">Warning:</span>
+                <span className="text-muted-foreground ml-1">
+                  These files will be permanently deleted after download
+                </span>
+              </div>
+            </div>
+          )}
+          
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-medium">Available Files ({files.length})</h3>
             <Button
@@ -165,7 +196,7 @@ export const FileDownload = () => {
             className="w-full bg-gradient-primary hover:shadow-glow"
           >
             <Download className="w-5 h-5 mr-2" />
-            {downloading ? 'Downloading...' : 'Download All Files'}
+            {downloading ? 'Downloading...' : `Download All Files${burnAfterDownload ? ' (Will Delete)' : ''}`}
           </Button>
         </Card>
       )}

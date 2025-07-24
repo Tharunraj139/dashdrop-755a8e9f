@@ -1,8 +1,9 @@
 import { useState, useRef } from 'react';
-import { Upload, Plus, X } from 'lucide-react';
+import { Upload, Plus, X, Flame } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
+import { Checkbox } from '@/components/ui/checkbox';
 import { FilePreview } from './FilePreview';
 import { CodeDisplay } from './CodeDisplay';
 
@@ -12,6 +13,7 @@ interface FileUploadProps {
 
 export const FileUpload = ({ onUploadComplete }: FileUploadProps) => {
   const [files, setFiles] = useState<File[]>([]);
+  const [burnAfterDownload, setBurnAfterDownload] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -75,6 +77,8 @@ export const FileUpload = ({ onUploadComplete }: FileUploadProps) => {
       setUploadCode(code);
       setUploading(false);
       onUploadComplete?.(code);
+      // Store burn setting for the code display component
+      localStorage.setItem(`burn_${code}`, burnAfterDownload.toString());
     }, 2000);
   };
 
@@ -82,12 +86,13 @@ export const FileUpload = ({ onUploadComplete }: FileUploadProps) => {
     setFiles([]);
     setUploadCode(null);
     setUploadProgress(0);
+    setBurnAfterDownload(false);
   };
 
   if (uploadCode) {
     return (
       <div className="space-y-6">
-        <CodeDisplay code={uploadCode} fileCount={files.length} />
+        <CodeDisplay code={uploadCode} fileCount={files.length} burnAfterDownload={burnAfterDownload} />
         <Button onClick={resetUpload} variant="outline" className="w-full">
           Upload More Files
         </Button>
@@ -130,6 +135,29 @@ export const FileUpload = ({ onUploadComplete }: FileUploadProps) => {
             onChange={handleFileSelect}
             className="hidden"
           />
+        </div>
+      </Card>
+
+      {/* Burn After Download Option - Always visible */}
+      <Card className="p-4">
+        <div className="flex items-center space-x-3">
+          <Checkbox
+            id="burn-after-download"
+            checked={burnAfterDownload}
+            onCheckedChange={(checked) => setBurnAfterDownload(checked === true)}
+          />
+          <div className="flex items-center space-x-2">
+            <Flame className="w-4 h-4 text-destructive" />
+            <label
+              htmlFor="burn-after-download"
+              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+            >
+              Burn after 1st download
+            </label>
+          </div>
+          <div className="text-xs text-muted-foreground ml-auto">
+            Files will be permanently deleted after first download
+          </div>
         </div>
       </Card>
 
