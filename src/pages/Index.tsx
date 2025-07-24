@@ -26,7 +26,7 @@ const Index = () => {
               </div>
             </div>
             <h1 className="text-5xl font-bold mb-4 bg-gradient-to-r from-primary to-primary-glow bg-clip-text text-transparent">
-              InstantShare
+              dashdrop
             </h1>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
               Share files instantly with a simple 6-digit code. No registration required, 
@@ -99,7 +99,7 @@ const Index = () => {
       <footer className="border-t bg-card/50 backdrop-blur-sm">
         <div className="container mx-auto px-4 py-8">
           <div className="text-center text-sm text-muted-foreground">
-            <p>© 2024 InstantShare. Files are automatically deleted after 1 hour.</p>
+            <p>© 2024 dashdrop. Files are automatically deleted after 1 hour.</p>
             <p className="mt-2">Built with security and privacy in mind.</p>
           </div>
         </div>
