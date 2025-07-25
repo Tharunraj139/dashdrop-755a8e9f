@@ -6,11 +6,16 @@ import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { FilePreview } from './FilePreview';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 interface FileInfo {
+  id: string;
   name: string;
+  original_filename: string;
   size: number;
   type: string;
+  storage_path: string;
+  burn_after_download: boolean;
 }
 
 export const FileDownload = () => {
@@ -22,13 +27,6 @@ export const FileDownload = () => {
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [codeFound, setCodeFound] = useState(false);
   const { toast } = useToast();
-
-  // Mock file data for demo
-  const mockFiles: FileInfo[] = [
-    { name: 'presentation.pdf', size: 2457600, type: 'application/pdf' },
-    { name: 'image.jpg', size: 1048576, type: 'image/jpeg' },
-    { name: 'document.docx', size: 524288, type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }
-  ];
 
   const handleSearch = async () => {
     if (code.length !== 6) {
@@ -42,72 +40,191 @@ export const FileDownload = () => {
 
     setLoading(true);
     
-    // Simulate API call
-    setTimeout(() => {
-      // For demo, accept any 6-character code
-      const isBurnEnabled = localStorage.getItem(`burn_${code}`) === 'true';
-      setBurnAfterDownload(isBurnEnabled);
-      setFiles(mockFiles);
-      setCodeFound(true);
-      setLoading(false);
+    try {
+      // Query files from database
+      const { data: filesData, error } = await supabase
+        .from('files')
+        .select('*')
+        .eq('filename', code)
+        .eq('is_burned', false)
+        .gt('expires_at', new Date().toISOString());
+
+      if (error) {
+        throw error;
+      }
+
+      if (filesData && filesData.length > 0) {
+        const fileInfos: FileInfo[] = filesData.map(file => ({
+          id: file.id,
+          name: file.original_filename,
+          original_filename: file.original_filename,
+          size: file.file_size,
+          type: file.mime_type,
+          storage_path: file.storage_path,
+          burn_after_download: file.burn_after_download
+        }));
+
+        setFiles(fileInfos);
+        setBurnAfterDownload(filesData[0].burn_after_download);
+        setCodeFound(true);
+        
+        toast({
+          title: "Files found!",
+          description: `Found ${filesData.length} files ready for download${filesData[0].burn_after_download ? ' (will be deleted after download)' : ''}`,
+        });
+      } else {
+        setFiles([]);
+        setCodeFound(true);
+        toast({
+          title: "No files found",
+          description: "The code may have expired or the files have been deleted",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Search error:', error);
       toast({
-        title: "Files found!",
-        description: `Found ${mockFiles.length} files ready for download${isBurnEnabled ? ' (will be deleted after download)' : ''}`,
+        title: "Search failed",
+        description: "There was an error searching for files. Please try again.",
+        variant: "destructive",
       });
-    }, 1000);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleDownload = async () => {
+    if (files.length === 0) return;
+
     setDownloading(true);
     setDownloadProgress(0);
 
-    // Simulate download progress
-    const interval = setInterval(() => {
-      setDownloadProgress(prev => {
-        if (prev >= 90) {
-          clearInterval(interval);
-          return 90;
-        }
-        return prev + Math.random() * 15;
-      });
-    }, 200);
+    try {
+      const progressPerFile = 100 / files.length;
+      let currentProgress = 0;
 
-    // Simulate download completion
-    setTimeout(() => {
-      clearInterval(interval);
-      setDownloadProgress(100);
-      setDownloading(false);
-      
-      // If burn after download is enabled, simulate file deletion
-      if (burnAfterDownload) {
+      for (const file of files) {
+        // Download file from storage
+        const { data, error } = await supabase.storage
+          .from('files')
+          .download(file.storage_path);
+
+        if (error) {
+          throw error;
+        }
+
+        // Create download link
+        const url = URL.createObjectURL(data);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = file.original_filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        // Update progress
+        currentProgress += progressPerFile;
+        setDownloadProgress(Math.min(currentProgress, 100));
+
+        // Small delay between downloads
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+
+      // Handle burn after download using the database function
+      if (burnAfterDownload && files.length > 0) {
+        for (const file of files) {
+          const { error } = await supabase.rpc('handle_file_download', {
+            file_id: file.id
+          });
+
+          if (error) {
+            console.error('Error handling file download:', error);
+          }
+        }
+
         toast({
           title: "Download complete!",
           description: "Files have been downloaded and permanently deleted from the server",
         });
+
         // Clear files and reset state
         setTimeout(() => {
           setFiles([]);
           setCodeFound(false);
           setCode('');
-          localStorage.removeItem(`burn_${code}`);
         }, 2000);
       } else {
+        // Just increment download count for non-burn files
+        for (const file of files) {
+          const { error } = await supabase.rpc('handle_file_download', {
+            file_id: file.id
+          });
+
+          if (error) {
+            console.error('Error updating download count:', error);
+          }
+        }
+
         toast({
           title: "Download complete!",
           description: "Your files have been downloaded successfully",
         });
       }
-    }, 3000);
+    } catch (error) {
+      console.error('Download error:', error);
+      toast({
+        title: "Download failed",
+        description: "There was an error downloading the files. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setDownloading(false);
+    }
   };
 
   const handleDelete = async () => {
-    toast({
-      title: "Files deleted",
-      description: "The files and code have been removed from the server",
-    });
-    setFiles([]);
-    setCodeFound(false);
-    setCode('');
+    if (files.length === 0) return;
+
+    try {
+      // Delete files from storage and mark as burned in database
+      for (const file of files) {
+        // Delete from storage
+        const { error: storageError } = await supabase.storage
+          .from('files')
+          .remove([file.storage_path]);
+
+        if (storageError) {
+          console.error('Storage deletion error:', storageError);
+        }
+
+        // Mark as burned in database
+        const { error: dbError } = await supabase
+          .from('files')
+          .update({ is_burned: true })
+          .eq('id', file.id);
+
+        if (dbError) {
+          console.error('Database update error:', dbError);
+        }
+      }
+
+      toast({
+        title: "Files deleted",
+        description: "The files and code have been removed from the server",
+      });
+      
+      setFiles([]);
+      setCodeFound(false);
+      setCode('');
+    } catch (error) {
+      console.error('Delete error:', error);
+      toast({
+        title: "Delete failed",
+        description: "There was an error deleting the files. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -171,7 +288,7 @@ export const FileDownload = () => {
           <div className="space-y-3 mb-6">
             {files.map((file, index) => (
               <div key={index} className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                <FilePreview file={file as File} />
+                <FilePreview file={{ name: file.original_filename, type: file.type, size: file.size } as File} />
                 <span className="text-sm text-muted-foreground">
                   {(file.size / 1024 / 1024).toFixed(2)} MB
                 </span>

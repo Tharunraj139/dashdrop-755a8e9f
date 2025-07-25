@@ -6,6 +6,8 @@ import { Progress } from '@/components/ui/progress';
 import { Checkbox } from '@/components/ui/checkbox';
 import { FilePreview } from './FilePreview';
 import { CodeDisplay } from './CodeDisplay';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 
 interface FileUploadProps {
   onUploadComplete?: (code: string) => void;
@@ -48,6 +50,8 @@ export const FileUpload = ({ onUploadComplete }: FileUploadProps) => {
     setFiles(prev => prev.filter((_, i) => i !== index));
   };
 
+  const { toast } = useToast();
+
   const generateCode = () => {
     return Math.random().toString(36).substring(2, 8).toUpperCase();
   };
@@ -58,28 +62,68 @@ export const FileUpload = ({ onUploadComplete }: FileUploadProps) => {
     setUploading(true);
     setUploadProgress(0);
 
-    // Simulate upload progress
-    const interval = setInterval(() => {
-      setUploadProgress(prev => {
-        if (prev >= 90) {
-          clearInterval(interval);
-          return 90;
-        }
-        return prev + Math.random() * 20;
-      });
-    }, 200);
-
-    // Simulate API call
-    setTimeout(() => {
-      clearInterval(interval);
-      setUploadProgress(100);
+    try {
       const code = generateCode();
+      const progressPerFile = 100 / files.length;
+      let currentProgress = 0;
+
+      // Upload each file to Supabase Storage
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const fileName = `${code}/${Date.now()}_${file.name}`;
+        const storagePath = `${code}/${file.name}`;
+
+        // Upload file to storage
+        const { error: uploadError } = await supabase.storage
+          .from('files')
+          .upload(storagePath, file, {
+            cacheControl: '3600',
+            upsert: false
+          });
+
+        if (uploadError) {
+          throw uploadError;
+        }
+
+        // Insert file metadata into database
+        const { error: dbError } = await supabase
+          .from('files')
+          .insert({
+            filename: code,
+            original_filename: file.name,
+            storage_path: storagePath,
+            file_size: file.size,
+            mime_type: file.type,
+            burn_after_download: burnAfterDownload,
+            expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString() // 1 hour from now
+          });
+
+        if (dbError) {
+          throw dbError;
+        }
+
+        // Update progress
+        currentProgress += progressPerFile;
+        setUploadProgress(Math.min(currentProgress, 100));
+      }
+
       setUploadCode(code);
-      setUploading(false);
       onUploadComplete?.(code);
-      // Store burn setting for the code display component
-      localStorage.setItem(`burn_${code}`, burnAfterDownload.toString());
-    }, 2000);
+      
+      toast({
+        title: "Upload successful!",
+        description: `${files.length} files uploaded with code: ${code}`,
+      });
+    } catch (error) {
+      console.error('Upload error:', error);
+      toast({
+        title: "Upload failed",
+        description: "There was an error uploading your files. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setUploading(false);
+    }
   };
 
   const resetUpload = () => {
