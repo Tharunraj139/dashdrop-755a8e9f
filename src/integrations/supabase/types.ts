@@ -14,13 +14,57 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      files: {
+        Row: {
+          burn_after_download: boolean
+          created_at: string
+          download_count: number
+          expires_at: string | null
+          file_size: number
+          filename: string
+          id: string
+          is_burned: boolean
+          mime_type: string
+          original_filename: string
+          storage_path: string
+        }
+        Insert: {
+          burn_after_download?: boolean
+          created_at?: string
+          download_count?: number
+          expires_at?: string | null
+          file_size: number
+          filename: string
+          id?: string
+          is_burned?: boolean
+          mime_type: string
+          original_filename: string
+          storage_path: string
+        }
+        Update: {
+          burn_after_download?: boolean
+          created_at?: string
+          download_count?: number
+          expires_at?: string | null
+          file_size?: number
+          filename?: string
+          id?: string
+          is_burned?: boolean
+          mime_type?: string
+          original_filename?: string
+          storage_path?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      handle_file_download: {
+        Args: { file_id: string }
+        Returns: Json
+      }
     }
     Enums: {
       [_ in never]: never
